@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS dimension_strava (
 
 CREATE TABLE IF NOT EXISTS fact_table (
     date DATE NOT NULL PRIMARY KEY DEFAULT (CURRENT_DATE)
-    , id_jira INT NOT NULL
-    , id_leetcode INT NOT NULL
-    , id_strava INT NOT NULL
+    , id_jira INT
+    , id_leetcode INT
+    , id_strava INT
     , FOREIGN KEY (id_jira) REFERENCES dimension_jira(id)
     , FOREIGN KEY (id_leetcode) REFERENCES dimension_leetcode(id)
     , FOREIGN KEY (id_strava) REFERENCES dimension_strava(id)
