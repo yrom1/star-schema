@@ -2,6 +2,7 @@ from os import environ
 
 from mysql.connector import connect
 
+print("TESTING")
 ENDPOINT = environ["RDS_ENDPOINT"]
 USER = environ["RDS_USER"]
 PASSWORD = environ["RDS_PASSWORD"]
