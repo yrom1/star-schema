@@ -1,0 +1,24 @@
+name: Test
+
+on:
+  push:
+
+env:
+  RDS_ENDPOINT: ${{ secrets.RDS_ENDPOINT }}
+  RDS_USER: ${{ secrets.RDS_USER }}
+  RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+
+jobs:
+  rds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get source
+        uses: actions/checkout@v2
+      - name: Get Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+      - name: Install dev requirements
+        run: pip install -r requirements.txt
+      - name: Test connection
+        run: python main.py
