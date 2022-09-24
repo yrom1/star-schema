@@ -147,13 +147,37 @@ class StarSchema:
                     )
             case "dimension_leetcode":
                 assert len(data) == 4
-                # id = self._insert_auto_increment(
-                #     f"""
-                # INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak)
-                # VALUES (%s, %s, %s, %s, %s)
-                # """,
-                #     (),
-                # )
+                fact_id = self._get_current_id_for_dimension("leetcode")
+                self._insert(
+                    f"""
+                INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak)
+                VALUES (%(id)s, %(python3_problems)s, %(mysql_problems)s, %(rank_)s, %(streak)s)
+                ON DUPLICATE KEY UPDATE
+                    python3_problems = %(python3_problems)s
+                    , mysql_problems = %(mysql_problems)s
+                    , rank_ = %(rank_)s
+                    , streak = %(streak)s
+                """,
+                    {
+                        "id": fact_id,
+                        "python3_problems": data[0],
+                        "mysql_problems": data[1],
+                        "rank_": data[2],
+                        "streak": data[3],
+                    },
+                )
+                dimension_id = self.query("SELECT MAX(id) FROM dimension_leetcode")[0][
+                    0
+                ]
+                if fact_id != dimension_id:
+                    self._insert(
+                        """
+                    INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
+                    VALUES (%(date)s, NULL, %(id_leetcode)s, NULL)
+                    ON DUPLICATE KEY UPDATE id_leetcode = %(id_leetcode)s
+                    """,
+                        {"date": self._today, "id_leetcode": dimension_id},
+                    )
             case "dimension_strava":
                 assert len(data) == 1
                 fact_id = self._get_current_id_for_dimension("strava")
@@ -185,6 +209,11 @@ class StarSchema:
 
 
 if __name__ == "__main__":
-    with StarSchema() as db:
-        db.insert_dimension("dimension_jira", [0])
-        db.insert_dimension("dimension_strava", [4.13])
+    if _DEBUG:
+        with StarSchema() as db:
+            db.insert_dimension("dimension_jira", [0])
+            db.insert_dimension("dimension_leetcode", [5, 0, 95000, 11])
+            db.insert_dimension("dimension_strava", [4.13])
+            db.insert_dimension(
+                "dimension_leetcode", [x + 1 for x in [5, 0, 95000, 11]]
+            )
