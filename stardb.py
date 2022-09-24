@@ -156,13 +156,25 @@ class StarSchema:
                 # )
             case "dimension_strava":
                 assert len(data) == 1
-                # id = self._insert_auto_increment(
-                #     f"""
-                # INSERT INTO dimension_strava (id, distance_km)
-                # VALUES (%s, %s)
-                # """,
-                #     (),
-                # )
+                fact_id = self._get_current_id_for_dimension("strava")
+                self._insert(
+                    f"""
+                INSERT INTO dimension_strava (id, distance_km)
+                VALUES (%(id)s, %(distance_km)s)
+                ON DUPLICATE KEY UPDATE distance_km = %(distance_km)s
+                """,
+                    {"id": fact_id, "distance_km": data[0]},
+                )
+                dimension_id = self.query("SELECT MAX(id) FROM dimension_jira")[0][0]
+                if fact_id != dimension_id:
+                    self._insert(
+                        """
+                    INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
+                    VALUES (%(date)s, NULL, NULL, %(id_strava)s)
+                    ON DUPLICATE KEY UPDATE id_strava = %(id_strava)s
+                    """,
+                        {"date": self._today, "id_strava": dimension_id},
+                    )
             case _:
                 raise StarSchemaError(
                     dedent(
@@ -175,3 +187,4 @@ class StarSchema:
 if __name__ == "__main__":
     with StarSchema() as db:
         db.insert_dimension("dimension_jira", [0])
+        db.insert_dimension("dimension_strava", [4.13])
