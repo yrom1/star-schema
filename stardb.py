@@ -88,9 +88,6 @@ class StarSchema:
         cur.execute(query, data)
         ans = cur.fetchall()
         cur.close()
-        if len(ans) == 1:
-            ans = ans[0]
-        _print(ans)
         return ans
 
     def _insert(self, query: str, data) -> None:
@@ -98,28 +95,19 @@ class StarSchema:
         cur.execute(query, data)
         cur.close()
 
-    def _insert_auto_increment(self, query: str, data) -> int:
-        """
-        Returns:
-            The AUTO_INCREMENT id generated for the dimension table row.
-        """
-
-        cur = self.conn.cursor()
-        cur.execute(query, data)
-        ans = cur.lastrowid
-        cur.close()
-        assert ans is not None
-        return ans
-
     def _get_current_id_for_dimension(self, dimension: str) -> int:
-        return self.query(
-            f"""
-        SELECT id_{dimension}
-        FROM fact_table
-        WHERE date = %s
-        """,
-            (self._today,),
-        )
+        try:
+            ans = self.query(
+                f"""
+            SELECT id_{dimension}
+            FROM fact_table
+            WHERE date = %s
+            """,
+                (self._today.strftime("%Y-%m-%d"),),
+            )
+            return ans[0][0]
+        except:
+            return None
 
     def insert_dimension(self, dimension: str, data) -> None:
         """Insert data into dimension table.
@@ -139,15 +127,15 @@ class StarSchema:
             case "dimension_jira":
                 assert len(data) == 1
                 fact_id = self._get_current_id_for_dimension("jira")
-                dimension_id = self._insert_auto_increment(
+                self._insert(
                     f"""
                 INSERT INTO dimension_jira (id, issues_done)
                 VALUES (%(id)s, %(issues_done)s)
                 ON DUPLICATE KEY UPDATE issues_done = %(issues_done)s
                 """,
-                    {"id": fact_id if fact_id else None, "issues_done": data[0]},
+                    {"id": fact_id, "issues_done": data[0]},
                 )
-                _print(self.query("select * from dimension_jira"))
+                dimension_id = self.query("SELECT MAX(id) FROM dimension_jira")[0][0]
                 if fact_id != dimension_id:
                     self._insert(
                         """
@@ -182,3 +170,8 @@ class StarSchema:
                     Did you forget to implement the upsert logic for this dimension?"""
                     )
                 )
+
+
+if __name__ == "__main__":
+    with StarSchema() as db:
+        db.insert_dimension("dimension_jira", [0])
