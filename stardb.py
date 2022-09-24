@@ -1,12 +1,14 @@
 from datetime import datetime
+from functools import wraps
 from os import environ
 from textwrap import dedent
+from typing import Callable
 from zoneinfo import ZoneInfo
 
 from mysql.connector import connect
 from mysql.connector.connection import MySQLConnection
 
-_DEBUG = False
+_DEBUG = True
 
 
 def _print(*args, **kwargs):
@@ -14,34 +16,74 @@ def _print(*args, **kwargs):
         print(*args, **kwargs)
 
 
+def _debug_func(func) -> Callable:
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        _print("QUALNAME", func.__qualname__)
+        _print(args, kwargs)
+        ans = func(*args, **kwargs)
+        _print("OUTPUT", ans)
+        return ans
+
+    return wrapper
+
+
+def _debug(cls) -> type:
+    for key, value in vars(cls).items():
+        if callable(value):
+            setattr(cls, key, _debug_func(value))
+            continue
+    return cls
+
+
 class StarSchemaError(Exception):
     pass
 
 
+@_debug
 class StarSchema:
     def __init__(self) -> None:
-        ENDPOINT = environ["RDS_ENDPOINT"]
-        USER = environ["RDS_USER"]
-        PASSWORD = environ["RDS_PASSWORD"]
-        environ["LIBMYSQL_ENABLE_CLEARTEXT_PLUGIN"] = "1"
-        self.conn = connect(
-            host=ENDPOINT,
-            user=USER,
-            passwd=PASSWORD,
-            port="3306",
-            database="metrics",
-        )
+        self._today = datetime.now(ZoneInfo("US/Eastern"))
+        if _DEBUG:
+            self.conn = connect(
+                host="localhost",
+                user="root",
+                passwd="root",
+                port="3306",
+                database="metrics",
+            )
+        else:
+            ENDPOINT = environ["RDS_ENDPOINT"]
+            USER = environ["RDS_USER"]
+            PASSWORD = environ["RDS_PASSWORD"]
+            environ["LIBMYSQL_ENABLE_CLEARTEXT_PLUGIN"] = "1"
+            self.conn = connect(
+                host=ENDPOINT,
+                user=USER,
+                passwd=PASSWORD,
+                port="3306",
+                database="metrics",
+            )
 
     def __enter__(self) -> MySQLConnection:
-        return self.conn
+        return self
 
-    def _close(self) -> None:
+    def _close(self):
+        self.conn.commit()
         self.conn.close()
 
-    def __exit__(self) -> None:
+    def __exit__(self, *_, **__) -> None:
         self._close()
 
-    def query(self, query: str, data):  # TODO return type
+    def query(self, query: str, data=tuple()):  # TODO return type
+        """Query star schema.
+
+        Args:
+            Query and data for paramaterization.
+
+        Returns:
+            List of rows, or unwrapped list if only one row.
+        """
         cur = self.conn.cursor()
         cur.execute(query, data)
         ans = cur.fetchall()
@@ -51,10 +93,13 @@ class StarSchema:
         _print(ans)
         return ans
 
+    def _insert(self, query: str, data) -> None:
+        cur = self.conn.cursor()
+        cur.execute(query, data)
+        cur.close()
+
     def _insert_auto_increment(self, query: str, data) -> int:
-        """Insert into dimension table.
-        Args:
-            Upsert query.
+        """
         Returns:
             The AUTO_INCREMENT id generated for the dimension table row.
         """
@@ -66,29 +111,21 @@ class StarSchema:
         assert ans is not None
         return ans
 
-    @staticmethod
-    def _today():
-        return datetime.now(ZoneInfo("US/Eastern")).strftime("%Y-%m-%d")
-
-    def _upsert_fact_foreign_key(self, data: list[int | None]) -> None:
-        """Insert id's of dimension foreign keys into fact table."""
-        today = self._today()
-        ...
-
     def _get_current_id_for_dimension(self, dimension: str) -> int:
-        today = self._today()
         return self.query(
             f"""
         SELECT id_{dimension}
-        FROM fact_tabe
+        FROM fact_table
         WHERE date = %s
         """,
-            (today),
+            (self._today,),
         )
 
     def insert_dimension(self, dimension: str, data) -> None:
-        """Insert data into dimension table. The class manages insertions/updates
-        of fact_table foreign keys.
+        """Insert data into dimension table.
+
+        The class manages insertions/updates of fact_table foreign keys.
+
         Args:
             dimension: name of the dimension, for 'dimension_jira' use 'jira'.
             data: Data to insert into dimension. NOTE Don't put None for the id
@@ -101,33 +138,43 @@ class StarSchema:
         match dimension:
             case "dimension_jira":
                 assert len(data) == 1
-                id_jira = self._get_current_id_for_dimension("jira")
-                foreign_key_jira = self._insert_auto_increment(
+                fact_id = self._get_current_id_for_dimension("jira")
+                dimension_id = self._insert_auto_increment(
                     f"""
                 INSERT INTO dimension_jira (id, issues_done)
                 VALUES (%(id)s, %(issues_done)s)
                 ON DUPLICATE KEY UPDATE issues_done = %(issues_done)s
                 """,
-                    {"id": id_jira, "issues_done": id[0]},
+                    {"id": fact_id if fact_id else None, "issues_done": data[0]},
                 )
+                _print(self.query("select * from dimension_jira"))
+                if fact_id != dimension_id:
+                    self._insert(
+                        """
+                    INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
+                    VALUES (%(date)s, %(id_jira)s, NULL, NULL)
+                    ON DUPLICATE KEY UPDATE id_jira = %(id_jira)s
+                    """,
+                        {"date": self._today, "id_jira": dimension_id},
+                    )
             case "dimension_leetcode":
                 assert len(data) == 4
-                id = self._insert_auto_increment(
-                    f"""
-                INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                    (),
-                )
+                # id = self._insert_auto_increment(
+                #     f"""
+                # INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak)
+                # VALUES (%s, %s, %s, %s, %s)
+                # """,
+                #     (),
+                # )
             case "dimension_strava":
                 assert len(data) == 1
-                id = self._insert_auto_increment(
-                    f"""
-                INSERT INTO dimension_strava (id, distance_km)
-                VALUES (%s, %s)
-                """,
-                    (),
-                )
+                # id = self._insert_auto_increment(
+                #     f"""
+                # INSERT INTO dimension_strava (id, distance_km)
+                # VALUES (%s, %s)
+                # """,
+                #     (),
+                # )
             case _:
                 raise StarSchemaError(
                     dedent(
