@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS dimension_leetcode (
 
 CREATE TABLE IF NOT EXISTS dimension_strava (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY
-    , distance_km INT NOT NULL
+    , distance_km FLOAT(3, 2) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS fact_table (
