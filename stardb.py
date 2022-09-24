@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from mysql.connector import connect
 from mysql.connector.connection import MySQLConnection
 
-_DEBUG = True
+_DEBUG = False
 
 
 def _print(*args, **kwargs):
