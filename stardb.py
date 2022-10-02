@@ -185,7 +185,7 @@ class StarSchema:
                     f"""
                 INSERT INTO dimension_strava (id, distance_km)
                 VALUES (%(id)s, %(distance_km)s)
-                ON DUPLICATE KEY UPDATE distance_km = %(distance_km)s
+                ON DUPLICATE KEY UPDATE distance_km = distance_km + %(distance_km)s
                 """,
                     {"id": fact_id, "distance_km": data[0]},
                 )
