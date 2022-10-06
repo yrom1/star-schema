@@ -185,7 +185,11 @@ class StarSchema:
                     f"""
                 INSERT INTO dimension_strava (id, distance_km)
                 VALUES (%(id)s, %(distance_km)s)
-                ON DUPLICATE KEY UPDATE distance_km = distance_km + %(distance_km)s
+                -- NOTE this is to fix some timezone issue until I switch to UTC
+                --      limitation is only tracks biggest run per day
+                --      there's something wrong with the number the strava repo gives
+                --      the correct distance gets written then gets reset to zero after
+                ON DUPLICATE KEY UPDATE distance_km = GREATEST(distance_km, %(distance_km)s)
                 """,
                     {"id": fact_id, "distance_km": data[0]},
                 )
