@@ -26,3 +26,6 @@ mysql>  SELECT @@global.time_zone;
     - https://www.bloomberg.com/company/stories/work-dates-time-python/
     - https://www.youtube.com/watch?v=XZlPXLsSU2U pycon us shows how to use the modern zoneinfo stuff
 - [ ] Pop quiz what's the highest value FLOAT(3, 2) can hold? It's 9.99, you'll need to fix the schema if you start running farther.
+- [ ] Get a smaller aws instance
+  - [ ] look more into rds pricing structure
+  - [ ] transfer db, keep the same connection details?
