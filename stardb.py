@@ -146,17 +146,18 @@ class StarSchema:
                         {"date": self._today, "id_jira": dimension_id},
                     )
             case "dimension_leetcode":
-                assert len(data) == 4
+                assert len(data) == 5
                 fact_id = self._get_current_id_for_dimension("leetcode")
                 self._insert(
                     f"""
-                INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak)
-                VALUES (%(id)s, %(python3_problems)s, %(mysql_problems)s, %(rank_)s, %(streak)s)
+                INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak, submissions)
+                VALUES (%(id)s, %(python3_problems)s, %(mysql_problems)s, %(rank_)s, %(streak)s, %(submissions)s)
                 ON DUPLICATE KEY UPDATE
                     python3_problems = %(python3_problems)s
                     , mysql_problems = %(mysql_problems)s
                     , rank_ = %(rank_)s
                     , streak = %(streak)s
+                    , submissions = %(submissions)s
                 """,
                     {
                         "id": fact_id,
@@ -164,6 +165,7 @@ class StarSchema:
                         "mysql_problems": data[1],
                         "rank_": data[2],
                         "streak": data[3],
+                        "submissions": data[4],
                     },
                 )
                 dimension_id = self.query("SELECT MAX(id) FROM dimension_leetcode")[0][
