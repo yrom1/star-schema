@@ -123,95 +123,94 @@ class StarSchema:
         for x in data:
             assert x is not None
 
-        match dimension:
-            case "dimension_jira":
-                assert len(data) == 1
-                fact_id = self._get_current_id_for_dimension("jira")
+        if dimension == "dimension_jira":
+            assert len(data) == 1
+            fact_id = self._get_current_id_for_dimension("jira")
+            self._insert(
+                f"""
+            INSERT INTO dimension_jira (id, issues_done)
+            VALUES (%(id)s, %(issues_done)s)
+            ON DUPLICATE KEY UPDATE issues_done = %(issues_done)s
+            """,
+                {"id": fact_id, "issues_done": data[0]},
+            )
+            dimension_id = self.query("SELECT MAX(id) FROM dimension_jira")[0][0]
+            if fact_id != dimension_id:
                 self._insert(
-                    f"""
-                INSERT INTO dimension_jira (id, issues_done)
-                VALUES (%(id)s, %(issues_done)s)
-                ON DUPLICATE KEY UPDATE issues_done = %(issues_done)s
+                    """
+                INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
+                VALUES (%(date)s, %(id_jira)s, NULL, NULL)
+                ON DUPLICATE KEY UPDATE id_jira = %(id_jira)s
                 """,
-                    {"id": fact_id, "issues_done": data[0]},
+                    {"date": self._today, "id_jira": dimension_id},
                 )
-                dimension_id = self.query("SELECT MAX(id) FROM dimension_jira")[0][0]
-                if fact_id != dimension_id:
-                    self._insert(
-                        """
-                    INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
-                    VALUES (%(date)s, %(id_jira)s, NULL, NULL)
-                    ON DUPLICATE KEY UPDATE id_jira = %(id_jira)s
-                    """,
-                        {"date": self._today, "id_jira": dimension_id},
-                    )
-            case "dimension_leetcode":
-                assert len(data) == 5
-                fact_id = self._get_current_id_for_dimension("leetcode")
+        if dimension == "dimension_leetcode":
+            assert len(data) == 5
+            fact_id = self._get_current_id_for_dimension("leetcode")
+            self._insert(
+                f"""
+            INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak, submissions)
+            VALUES (%(id)s, %(python3_problems)s, %(mysql_problems)s, %(rank_)s, %(streak)s, %(submissions)s)
+            ON DUPLICATE KEY UPDATE
+                python3_problems = %(python3_problems)s
+                , mysql_problems = %(mysql_problems)s
+                , rank_ = %(rank_)s
+                , streak = %(streak)s
+                , submissions = %(submissions)s
+            """,
+                {
+                    "id": fact_id,
+                    "python3_problems": data[0],
+                    "mysql_problems": data[1],
+                    "rank_": data[2],
+                    "streak": data[3],
+                    "submissions": data[4],
+                },
+            )
+            dimension_id = self.query("SELECT MAX(id) FROM dimension_leetcode")[0][
+                0
+            ]
+            if fact_id != dimension_id:
                 self._insert(
-                    f"""
-                INSERT INTO dimension_leetcode (id, python3_problems, mysql_problems, rank_, streak, submissions)
-                VALUES (%(id)s, %(python3_problems)s, %(mysql_problems)s, %(rank_)s, %(streak)s, %(submissions)s)
-                ON DUPLICATE KEY UPDATE
-                    python3_problems = %(python3_problems)s
-                    , mysql_problems = %(mysql_problems)s
-                    , rank_ = %(rank_)s
-                    , streak = %(streak)s
-                    , submissions = %(submissions)s
+                    """
+                INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
+                VALUES (%(date)s, NULL, %(id_leetcode)s, NULL)
+                ON DUPLICATE KEY UPDATE id_leetcode = %(id_leetcode)s
                 """,
-                    {
-                        "id": fact_id,
-                        "python3_problems": data[0],
-                        "mysql_problems": data[1],
-                        "rank_": data[2],
-                        "streak": data[3],
-                        "submissions": data[4],
-                    },
+                    {"date": self._today, "id_leetcode": dimension_id},
                 )
-                dimension_id = self.query("SELECT MAX(id) FROM dimension_leetcode")[0][
-                    0
-                ]
-                if fact_id != dimension_id:
-                    self._insert(
-                        """
-                    INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
-                    VALUES (%(date)s, NULL, %(id_leetcode)s, NULL)
-                    ON DUPLICATE KEY UPDATE id_leetcode = %(id_leetcode)s
-                    """,
-                        {"date": self._today, "id_leetcode": dimension_id},
-                    )
-            case "dimension_strava":
-                assert len(data) == 1
-                fact_id = self._get_current_id_for_dimension("strava")
+        if dimension == "dimension_strava":
+            assert len(data) == 1
+            fact_id = self._get_current_id_for_dimension("strava")
+            self._insert(
+                f"""
+            INSERT INTO dimension_strava (id, distance_km)
+            VALUES (%(id)s, %(distance_km)s)
+            -- NOTE this is to fix some timezone issue until I switch to UTC
+            --      limitation is only tracks biggest run per day
+            --      there's something wrong with the number the strava repo gives
+            --      the correct distance gets written then gets reset to zero after
+            ON DUPLICATE KEY UPDATE distance_km = GREATEST(distance_km, %(distance_km)s)
+            """,
+                {"id": fact_id, "distance_km": data[0]},
+            )
+            dimension_id = self.query("SELECT MAX(id) FROM dimension_jira")[0][0]
+            if fact_id != dimension_id:
                 self._insert(
-                    f"""
-                INSERT INTO dimension_strava (id, distance_km)
-                VALUES (%(id)s, %(distance_km)s)
-                -- NOTE this is to fix some timezone issue until I switch to UTC
-                --      limitation is only tracks biggest run per day
-                --      there's something wrong with the number the strava repo gives
-                --      the correct distance gets written then gets reset to zero after
-                ON DUPLICATE KEY UPDATE distance_km = GREATEST(distance_km, %(distance_km)s)
+                    """
+                INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
+                VALUES (%(date)s, NULL, NULL, %(id_strava)s)
+                ON DUPLICATE KEY UPDATE id_strava = %(id_strava)s
                 """,
-                    {"id": fact_id, "distance_km": data[0]},
+                    {"date": self._today, "id_strava": dimension_id},
                 )
-                dimension_id = self.query("SELECT MAX(id) FROM dimension_jira")[0][0]
-                if fact_id != dimension_id:
-                    self._insert(
-                        """
-                    INSERT INTO fact_table (date, id_jira, id_leetcode, id_strava)
-                    VALUES (%(date)s, NULL, NULL, %(id_strava)s)
-                    ON DUPLICATE KEY UPDATE id_strava = %(id_strava)s
-                    """,
-                        {"date": self._today, "id_strava": dimension_id},
-                    )
-            case _:
-                raise StarSchemaError(
-                    dedent(
-                        f"""Dimension table name `{dimension}` not found. \
-                    Did you forget to implement the upsert logic for this dimension?"""
-                    )
-                )
+
+        raise StarSchemaError(
+            dedent(
+                f"""Dimension table name `{dimension}` not found. \
+            Did you forget to implement the upsert logic for this dimension?"""
+            )
+        )
 
 
 if __name__ == "__main__":
